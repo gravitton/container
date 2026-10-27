@@ -13,7 +13,7 @@ import (
 // Array is a table of values of type T, one for every index of a size in columns and rows,
 // stored row by row. Its sides and indices are of the integer type S, which bounds each side by
 // what S holds; only the number of values is an int. It is a handle: a copy shares its values,
-// and Clone gives storage of its own. The zero value is the empty array.
+// and [Array.Clone] gives storage of its own. The zero value is the empty array.
 type Array[T any, S geom.Integer] struct {
 	size geom.Size[S]
 	data []T
@@ -56,7 +56,7 @@ func (a Array[T, S]) Get(index geom.Point[S]) *T {
 		panic(arrayIndexError[S]{index, a.size})
 	}
 
-	return a.at(index)
+	return &a.data[int(index.X)+int(index.Y)*int(a.size.Width)]
 }
 
 // Set stores value at the index. It panics for an index outside the array.
@@ -126,12 +126,6 @@ func (a Array[T, S]) All() iter.Seq2[geom.Point[S], *T] {
 			}
 		}
 	}
-}
-
-// at returns a pointer to the value at an index the caller knows to be inside the array, its
-// offset counted in int, where S could not hold it.
-func (a Array[T, S]) at(index geom.Point[S]) *T {
-	return &a.data[int(index.X)+int(index.Y)*int(a.size.Width)]
 }
 
 // Contains reports whether the index is that of a value of the array.

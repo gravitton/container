@@ -70,7 +70,7 @@ err = json.Unmarshal(data, &heat) // and back; an error where the values do not 
 seen := container.SetOf(points...) // in any order, with repeats; SetFrom takes a slice as its own
 hit := container.SetOf(geom.Pt(2, 0), geom.Pt(3, 0))
 
-seen.Intersection(hit)       // also Union, Difference and SymmetricDifference, each one allocation
+seen.Intersection(hit)       // also Union, Difference and SymmetricDifference, at most one allocation
 seen.Intersects(hit)         // whether they share an element, without building it; also Encloses
 seen.Contains(geom.Pt(1, 0)) // a binary search
 seen.Len()                   // also IsEmpty and Equal
