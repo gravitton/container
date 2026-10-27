@@ -61,24 +61,13 @@ func (a Array[T, S]) Get(index geom.Point[S]) *T {
 
 // Set stores value at the index. It panics for an index outside the array.
 func (a Array[T, S]) Set(index geom.Point[S], value T) {
-	if !a.Contains(index) {
-		panic(arrayIndexError[S]{index, a.size})
-	}
-
-	*a.at(index) = value
+	*a.Get(index) = value
 }
 
-// Row returns the values of row y as a slice into the array, from the first column to the last:
-// a write through it changes the array, and an append past its end never reaches the next row.
-// It panics for a row outside the array.
-func (a Array[T, S]) Row(y S) []T {
-	if y < 0 || y >= a.size.Height {
-		panic(fmt.Errorf("container: row %d outside array of size %s", y, a.size))
-	}
-
-	start, end := int(y)*int(a.size.Width), (int(y)+1)*int(a.size.Width)
-
-	return a.data[start:end:end]
+// Data returns the values of the array row by row as a slice into the array: a write through it
+// changes the array, and an append to it never does. It is nil for the zero array.
+func (a Array[T, S]) Data() []T {
+	return a.data[:len(a.data):len(a.data)]
 }
 
 // Fill sets every value of the array to value.
@@ -127,12 +116,14 @@ func (a Array[T, S]) Values() iter.Seq[*T] {
 // order of Keys.
 func (a Array[T, S]) All() iter.Seq2[geom.Point[S], *T] {
 	return func(yield func(geom.Point[S], *T) bool) {
-		i := 0
-		for index := range a.Keys() {
-			if !yield(index, &a.data[i]) {
-				return
+		width := int(a.size.Width)
+		for y := S(0); y < a.size.Height; y++ {
+			row := a.data[int(y)*width : (int(y)+1)*width]
+			for x := range row {
+				if !yield(geom.Pt(S(x), y), &row[x]) {
+					return
+				}
 			}
-			i++
 		}
 	}
 }
@@ -157,9 +148,9 @@ func (a Array[T, S]) MarshalJSON() ([]byte, error) {
 	}{a.size, a.data})
 }
 
-// UnmarshalJSON implements json.Unmarshaler, reading null values as none. It returns an error
-// for a size Arr panics for or S cannot hold, and for a number of values other than the width
-// times the height, and leaves the array as it was on an error.
+// UnmarshalJSON implements json.Unmarshaler, reading null as the zero array and null values as
+// none. It returns an error for a size Arr panics for or S cannot hold, and for a number of
+// values other than the width times the height, and leaves the array as it was on an error.
 func (a *Array[T, S]) UnmarshalJSON(data []byte) error {
 	var decoded struct {
 		Size   geom.Size[S] `json:",embed"`

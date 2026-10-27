@@ -15,7 +15,8 @@
 // side. The one way to change a set is a write to the slice given to [SetFrom].
 //
 // Compare must be a total order, and the same each time it is asked; on any other the answers of
-// a set are undefined.
+// a set are undefined. Elements that compare the same are one element: where both sets hold it,
+// a result may hold the one of either set.
 //
 // The zero value of every container is the empty one, ready to use.
 //
@@ -24,7 +25,7 @@
 // A slice or set result is allocated once, at its final size, and each slice result has an
 // Append form that allocates nothing once the caller's slice has room. [SetOf] allocates once,
 // for its copy of the elements, and [SetFrom] nothing. A read, a write and a test allocate
-// nothing.
+// nothing; [Array.Data] is a read, the array's own storage rather than a result.
 //
 // # Panics
 //
@@ -32,6 +33,6 @@
 // error:
 //
 //   - [Arr] for a negative width or height, or a size of more values than an int counts.
-//   - [Array.Get] and [Array.Set] for an index outside the array, [Array.Row] for a row outside
-//     it, and [Set.At] for an index outside the set.
+//   - [Array.Get] and [Array.Set] for an index outside the array, and [Set.At] for an index
+//     outside the set.
 package container

@@ -53,9 +53,9 @@ for _, value := range heat.All() { // also Keys and Values
 	*value *= 0.9
 }
 
-row := heat.Row(2) // a row as a slice into the array, the fastest loop
-for x := range row {
-	row[x] /= 2
+values := heat.Data() // every value row by row as a slice into the array, the fastest loop
+for i := range values {
+	values[i] = min(values[i], 1)
 }
 
 data, err := json.Marshal(heat)   // {"w":64,"h":64,"d":[…]}, the values row by row
@@ -101,11 +101,9 @@ The MIT License (MIT). Please see [License File][link-licence] for more informat
 [ico-go-dev-reference]:     https://img.shields.io/badge/go.dev-reference-blue?style=flat-square
 [ico-coverage]:             https://img.shields.io/coverallsCoverage/github/gravitton/container?style=flat-square
 
-[link-author]:              https://github.com/gravitton
 [link-release]:             https://github.com/gravitton/container/releases
 [link-contributors]:        https://github.com/gravitton/container/contributors
 [link-licence]:             ./LICENSE.md
-[link-changelog]:           ./CHANGELOG.md
 [link-workflow]:            https://github.com/gravitton/container/actions
 [link-go-dev-reference]:    https://pkg.go.dev/github.com/gravitton/container
 [link-coverage]:            https://coveralls.io/github/gravitton/container

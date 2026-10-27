@@ -54,22 +54,37 @@ func square(center Tile, n int) []Tile {
 
 // referenceSet returns the elements a map-based set keeps of the two sets, sorted.
 func referenceSet(a, b Set[Tile], keep func(inA, inB bool) bool) []Tile {
-	seen := map[Tile]bool{}
-	for _, s := range []Set[Tile]{a, b} {
-		for element := range s.All() {
-			seen[element] = true
-		}
-	}
+	inA, inB := referenceMap(a), referenceMap(b)
 
 	var kept []Tile
-	for element := range seen {
-		if keep(a.Contains(element), b.Contains(element)) {
+	for element := range inA {
+		if keep(true, inB[element]) {
+			kept = append(kept, element)
+		}
+	}
+	for element := range inB {
+		if !inA[element] && keep(false, true) {
 			kept = append(kept, element)
 		}
 	}
 	slices.SortFunc(kept, Tile.Compare)
 
 	return kept
+}
+
+// referenceMap returns the elements of the set as the keys of a map.
+func referenceMap(s Set[Tile]) map[Tile]bool {
+	elements := map[Tile]bool{}
+	for element := range s.All() {
+		elements[element] = true
+	}
+
+	return elements
+}
+
+// testSets returns the sets the properties of a single set are checked on.
+func testSets() []Set[Tile] {
+	return []Set[Tile]{testSet, testSetOther, testSetEmpty, SetOf(Tile{9, 9}), SetOf(square(Tile{0, 0}, 1)...)}
 }
 
 // testSetPairs returns the pairs of sets every operation is checked on.
@@ -239,6 +254,11 @@ func TestSet_Len(t *testing.T) {
 	t.Run("the empty set has none", func(t *testing.T) {
 		assert.Equal(t, testSetEmpty.Len(), 0)
 	})
+	t.Run("agrees with the elements", func(t *testing.T) {
+		for _, s := range testSets() {
+			assert.Length(t, s.Elements(), s.Len(), fmt.Sprint(s.Elements(), ": "))
+		}
+	})
 }
 
 func TestSet_At(t *testing.T) {
@@ -301,6 +321,16 @@ func TestSet_First(t *testing.T) {
 
 		assert.False(t, found)
 	})
+	t.Run("agrees with At", func(t *testing.T) {
+		for _, s := range testSets() {
+			element, found := s.First()
+
+			assert.Equal(t, found, !s.IsEmpty(), fmt.Sprint(s.Elements(), ": "))
+			if found {
+				assert.Equal(t, element, s.At(0), fmt.Sprint(s.Elements(), ": "))
+			}
+		}
+	})
 }
 
 func TestSet_Last(t *testing.T) {
@@ -314,6 +344,16 @@ func TestSet_Last(t *testing.T) {
 		_, found := testSetEmpty.Last()
 
 		assert.False(t, found)
+	})
+	t.Run("agrees with At", func(t *testing.T) {
+		for _, s := range testSets() {
+			element, found := s.Last()
+
+			assert.Equal(t, found, !s.IsEmpty(), fmt.Sprint(s.Elements(), ": "))
+			if found {
+				assert.Equal(t, element, s.At(s.Len()-1), fmt.Sprint(s.Elements(), ": "))
+			}
+		}
 	})
 }
 
@@ -468,6 +508,15 @@ func TestSet_Contains(t *testing.T) {
 		assert.False(t, testSet.Contains(Tile{3, 0}))
 		assert.False(t, testSetEmpty.Contains(Tile{0, 0}))
 	})
+	t.Run("agrees with Index", func(t *testing.T) {
+		for _, pair := range testSetPairs() {
+			for element := range pair[1].All() {
+				_, found := pair[0].Index(element)
+
+				assert.Equal(t, pair[0].Contains(element), found, fmt.Sprint(pair[0].Elements(), " at ", element, ": "))
+			}
+		}
+	})
 }
 
 func BenchmarkSet_Contains(b *testing.B) {
@@ -552,6 +601,11 @@ func TestSet_Equal(t *testing.T) {
 	t.Run("the empty set equals the zero value", func(t *testing.T) {
 		assert.True(t, testSet.Difference(testSet).Equal(testSetEmpty))
 	})
+	t.Run("agrees with enclosing both ways", func(t *testing.T) {
+		for _, pair := range testSetPairs() {
+			assert.Equal(t, pair[0].Equal(pair[1]), pair[0].Encloses(pair[1]) && pair[1].Encloses(pair[0]), fmt.Sprint(pair[0].Elements(), " and ", pair[1].Elements(), ": "))
+		}
+	})
 }
 
 func TestSet_IsEmpty(t *testing.T) {
@@ -561,6 +615,11 @@ func TestSet_IsEmpty(t *testing.T) {
 	})
 	t.Run("a set with an element is not", func(t *testing.T) {
 		assert.False(t, SetOf(Tile{0, 0}).IsEmpty())
+	})
+	t.Run("agrees with Len", func(t *testing.T) {
+		for _, s := range testSets() {
+			assert.Equal(t, s.IsEmpty(), s.Len() == 0, fmt.Sprint(s.Elements(), ": "))
+		}
 	})
 }
 

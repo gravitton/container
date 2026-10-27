@@ -25,6 +25,26 @@ func testArraySizes() []geom.Size[int] {
 	return []geom.Size[int]{geom.Sz(4, 3), geom.Sz(1, 1), geom.Sz(1, 5), geom.Sz(0, 0), geom.Sz(4, 0), geom.Sz(0, 3)}
 }
 
+// testArray returns an array of the given size, every value distinct from the others.
+func testArray(size geom.Size[int]) Array[int, int] {
+	a := Arr[int](size)
+	for index, value := range a.All() {
+		*value = 1 + index.X + 100*index.Y
+	}
+
+	return a
+}
+
+// arrayValues returns the values of the array row by row.
+func arrayValues(a Array[int, int]) []int {
+	values := make([]int, 0, a.Len())
+	for value := range a.Values() {
+		values = append(values, *value)
+	}
+
+	return values
+}
+
 func TestArray_Constructor(t *testing.T) {
 	a := Arr[int](geom.Sz(4, 3))
 
@@ -67,7 +87,7 @@ func TestArray_Constructor(t *testing.T) {
 		assert.Equal(t, narrow.Size(), geom.Sz[int8](127, 3))
 		assert.Equal(t, narrow.Len(), 381)
 		assert.Equal(t, *narrow.Get(geom.Pt[int8](126, 2)), 7)
-		assert.Equal(t, narrow.Row(2)[126], 7)
+		assert.Equal(t, narrow.Data()[2*127+126], 7)
 		assert.False(t, narrow.Contains(geom.Pt[int8](-1, 0)))
 	})
 	t.Run("panics for a size of more values than an int counts", func(t *testing.T) {
@@ -101,20 +121,26 @@ func ExampleArr() {
 		*value *= 2
 	}
 
-	row := heat.Row(1)
-	for x := range row {
-		row[x] /= 2
+	values := heat.Data()
+	for i := range values {
+		values[i] /= 2
 	}
 
 	data, _ := json.Marshal(heat)
+	var decoded Array[float64, int]
+	err := json.Unmarshal(data, &decoded)
 	small := Arr[uint8](geom.Sz[int16](320, 200))
 
 	fmt.Println(heat.Size(), heat.Len(), *heat.Get(geom.Pt(1, 1)))
+	fmt.Println(heat.Data())
 	fmt.Println(string(data))
+	fmt.Println(decoded.Size(), *decoded.Get(geom.Pt(1, 1)), err)
 	fmt.Println(small.Size(), small.Len())
 	// Output:
 	// 3x2 6 0.75
+	// [0 0 0 0 0.75 0]
 	// {"w":3,"h":2,"d":[0,0,0,0,0.75,0]}
+	// 3x2 0.75 <nil>
 	// 320x200 64000
 }
 
@@ -282,7 +308,7 @@ func FuzzArray_Set(f *testing.F) {
 		}
 
 		for y, row := range rows {
-			assert.Equal(t, a.Row(y), row, fmt.Sprint("row ", y, ": "))
+			assert.Equal(t, a.Data()[y*size.Width:(y+1)*size.Width], row, fmt.Sprint("row ", y, ": "))
 		}
 
 		count := 0
@@ -297,80 +323,83 @@ func FuzzArray_Set(f *testing.F) {
 	})
 }
 
-func TestArray_Row(t *testing.T) {
-	a := Arr[int](geom.Sz(4, 3))
-	for index, value := range a.All() {
-		*value = index.X + 10*index.Y
-	}
+func TestArray_Data(t *testing.T) {
+	a := testArray(geom.Sz(4, 3))
 
-	t.Run("holds the values of the row in column order", func(t *testing.T) {
-		for y := range a.Height() {
-			row := a.Row(y)
-
-			assert.Length(t, row, a.Width())
-			for x, value := range row {
-				assert.Equal(t, value, *a.Get(geom.Pt(x, y)), geom.Pt(x, y).String()+": ")
-			}
-		}
+	t.Run("holds the values row by row", func(t *testing.T) {
+		assert.Equal(t, a.Data(), arrayValues(a))
 	})
 	t.Run("a write through it changes the array", func(t *testing.T) {
-		a.Row(1)[2] = 99
+		a.Data()[6] = 99
 
 		assert.Equal(t, *a.Get(geom.Pt(2, 1)), 99)
 	})
-	t.Run("an append past its end leaves the next row alone", func(t *testing.T) {
-		sinkInts = append(a.Row(0), 77)
+	t.Run("is capped at its length, read from JSON too", func(t *testing.T) {
+		var decoded Array[int, int]
+		assert.NoError(t, json.Unmarshal([]byte(`{"w":3,"h":1,"d":[1,2,3]}`), &decoded))
 
-		assert.Equal(t, *a.Get(geom.Pt(0, 1)), 10)
+		for _, data := range [][]int{a.Data(), decoded.Data()} {
+			assert.Equal(t, cap(data), len(data))
+		}
 	})
-	t.Run("a row of no columns is empty", func(t *testing.T) {
-		assert.Length(t, Arr[int](geom.Sz(0, 3)).Row(1), 0)
+	t.Run("agrees with Get at every index", func(t *testing.T) {
+		for _, size := range testArraySizes() {
+			a := testArray(size)
+			for index := range a.Keys() {
+				assert.Equal(t, &a.Data()[index.X+index.Y*size.Width], a.Get(index), size.String()+" at "+index.String()+": ")
+			}
+		}
 	})
-	t.Run("panics outside the rows", func(t *testing.T) {
-		assert.PanicsWith(t, func() {
-			a.Row(3)
-		}, "container: row 3 outside array of size 4x3")
-		assert.PanicsWith(t, func() {
-			a.Row(-1)
-		}, "container: row -1 outside array of size 4x3")
+	t.Run("the zero array has none", func(t *testing.T) {
+		assert.Equal(t, Array[int, int]{}.Data(), nil)
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
 		assert.Equal(t, testing.AllocsPerRun(10, func() {
-			sinkInts = a.Row(2)
+			sinkInts = a.Data()
 		}), 0.0)
 	})
 }
 
-func BenchmarkArray_Row(b *testing.B) {
-	a := Arr[int](geom.Sz(64, 64))
-
-	for b.Loop() {
-		for y := range 64 {
-			row := a.Row(y)
-			for x := range row {
-				row[x] = x
-			}
-		}
-	}
-}
-
 func TestArray_Fill(t *testing.T) {
-	a := Arr[int](geom.Sz(3, 3))
-	a.Fill(9)
+	t.Run("sets every value", func(t *testing.T) {
+		a := testArray(geom.Sz(3, 3))
+		a.Fill(9)
 
-	for index, value := range a.All() {
-		assert.Equal(t, *value, 9, index.String()+": ")
-	}
+		for index, value := range a.All() {
+			assert.Equal(t, *value, 9, index.String()+": ")
+		}
+	})
+	t.Run("agrees with Set at every index", func(t *testing.T) {
+		for _, size := range testArraySizes() {
+			filled, set := testArray(size), testArray(size)
+			filled.Fill(9)
+			for index := range set.Keys() {
+				set.Set(index, 9)
+			}
+
+			assert.Equal(t, arrayValues(filled), arrayValues(set), size.String()+": ")
+		}
+	})
 }
 
 func TestArray_Clear(t *testing.T) {
-	a := Arr[int](geom.Sz(3, 3))
-	a.Fill(9)
-	a.Clear()
+	t.Run("resets every value", func(t *testing.T) {
+		a := testArray(geom.Sz(3, 3))
+		a.Clear()
 
-	for index, value := range a.All() {
-		assert.Equal(t, *value, 0, index.String()+": ")
-	}
+		for index, value := range a.All() {
+			assert.Equal(t, *value, 0, index.String()+": ")
+		}
+	})
+	t.Run("agrees with filling the zero value", func(t *testing.T) {
+		for _, size := range testArraySizes() {
+			cleared, filled := testArray(size), testArray(size)
+			cleared.Clear()
+			filled.Fill(0)
+
+			assert.Equal(t, arrayValues(cleared), arrayValues(filled), size.String()+": ")
+		}
+	})
 }
 
 func TestArray_Clone(t *testing.T) {
@@ -393,6 +422,15 @@ func TestArray_Clone(t *testing.T) {
 		shared.Set(geom.Pt(1, 1), 7)
 
 		assert.Equal(t, *original.Get(geom.Pt(1, 1)), 7)
+	})
+	t.Run("holds the size and the values of the original", func(t *testing.T) {
+		for _, size := range testArraySizes() {
+			a := testArray(size)
+			clone := a.Clone()
+
+			assert.Equal(t, clone.Size(), a.Size(), size.String()+": ")
+			assert.Equal(t, arrayValues(clone), arrayValues(a), size.String()+": ")
+		}
 	})
 	t.Run("the zero value clones to the zero value", func(t *testing.T) {
 		assert.Equal(t, Array[int, int]{}.Clone(), Array[int, int]{})
@@ -521,6 +559,16 @@ func TestArray_All(t *testing.T) {
 	})
 }
 
+func BenchmarkArray_All(b *testing.B) {
+	a := Arr[int](geom.Sz(64, 64))
+
+	for b.Loop() {
+		for index, value := range a.All() {
+			*value = index.X
+		}
+	}
+}
+
 func TestArray_Contains(t *testing.T) {
 	a := Arr[int](geom.Sz(4, 3))
 
@@ -535,6 +583,22 @@ func TestArray_Contains(t *testing.T) {
 	t.Run("the size itself is outside", func(t *testing.T) {
 		assert.False(t, a.Contains(geom.Pt(4, 0)))
 		assert.False(t, a.Contains(geom.Pt(0, 3)))
+	})
+	t.Run("agrees with the indices of Keys", func(t *testing.T) {
+		for _, size := range testArraySizes() {
+			a := Arr[int](size)
+			for index := range a.Keys() {
+				assert.True(t, a.Contains(index), size.String()+" at "+index.String()+": ")
+			}
+			for _, index := range []geom.Point[int]{geom.Pt(-1, 0), geom.Pt(0, -1), geom.Pt(size.Width, 0), geom.Pt(0, size.Height)} {
+				assert.False(t, a.Contains(index), size.String()+" at "+index.String()+": ")
+			}
+		}
+	})
+	t.Run("allocates nothing", func(t *testing.T) {
+		assert.Equal(t, testing.AllocsPerRun(10, func() {
+			sinkBool = a.Contains(geom.Pt(1, 1))
+		}), 0.0)
 	})
 }
 
@@ -574,6 +638,13 @@ func TestArray_JSON(t *testing.T) {
 		var decoded Array[int, int]
 		assert.NoError(t, json.Unmarshal(data, &decoded))
 		assert.Equal(t, decoded.Size(), geom.Sz(4, 0))
+	})
+	t.Run("null is the zero array", func(t *testing.T) {
+		decoded := testArray(geom.Sz(2, 1))
+
+		assert.NoError(t, json.Unmarshal([]byte(`null`), &decoded))
+		assert.Equal(t, decoded.Size(), geom.Sz(0, 0))
+		assert.Equal(t, decoded.Len(), 0)
 	})
 	t.Run("null values are none", func(t *testing.T) {
 		var decoded Array[int, int]
