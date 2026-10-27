@@ -197,21 +197,26 @@ func TestSetOf(t *testing.T) {
 }
 
 func ExampleSetOf() {
-	seen := SetOf(geom.Pt(2, 0), geom.Pt(0, 0), geom.Pt(1, 0), geom.Pt(0, 0))
-	hit := SetOf(geom.Pt(2, 0), geom.Pt(3, 0))
+	a := SetOf(geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(2, 2))
+	points := []geom.Point[int]{geom.Pt(2, 2), geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(1, 1)}
+	from := SetFrom(points)
 
-	fmt.Println(seen.Intersection(hit).Elements(), seen.Intersects(hit), seen.Encloses(hit))
-	fmt.Println(seen.Contains(geom.Pt(1, 0)), seen.Len())
+	first, ok := a.First()
+	index, found := a.Index(geom.Pt(2, 1))
 
-	fmt.Println(slices.Collect(seen.Backward()))
+	fmt.Println(from.Equal(a), a.Contains(geom.Pt(2, 1)), a.Len())
+	fmt.Println(first, ok, index, found)
+	fmt.Println(slices.Collect(a.All()), slices.Collect(a.Backward()))
+	fmt.Println(a.Elements())
 
-	data, _ := json.Marshal(seen)
+	data, _ := json.Marshal(a)
 	fmt.Println(string(data))
 	// Output:
-	// [(2,0)] true false
-	// true 3
-	// [(2,0) (1,0) (0,0)]
-	// [{"x":0,"y":0},{"x":1,"y":0},{"x":2,"y":0}]
+	// true true 4
+	// (1,1) true 2 true
+	// [(1,1) (1,2) (2,1) (2,2)] [(2,2) (2,1) (1,2) (1,1)]
+	// [(1,1) (1,2) (2,1) (2,2)]
+	// [{"x":1,"y":1},{"x":1,"y":2},{"x":2,"y":1},{"x":2,"y":2}]
 }
 
 func TestSetFrom(t *testing.T) {
@@ -442,6 +447,23 @@ func TestSet_Union(t *testing.T) {
 	testSetOperation(t, Set[Tile].Union, func(inA, inB bool) bool {
 		return inA || inB
 	})
+}
+
+func ExampleSet_Union() {
+	a := SetOf(geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(2, 2))
+	b := SetOf(geom.Pt(2, 2), geom.Pt(3, 2), geom.Pt(2, 3), geom.Pt(3, 3))
+
+	fmt.Println(a.Union(b).Elements())
+	fmt.Println(a.Intersection(b).Elements())
+	fmt.Println(a.Difference(b).Elements())
+	fmt.Println(a.SymmetricDifference(b).Elements())
+	fmt.Println(a.Intersects(b), a.Encloses(b), a.Equal(b))
+	// Output:
+	// [(1,1) (1,2) (2,1) (2,2) (2,3) (3,2) (3,3)]
+	// [(2,2)]
+	// [(1,1) (1,2) (2,1)]
+	// [(1,1) (1,2) (2,1) (2,3) (3,2) (3,3)]
+	// true false false
 }
 
 func BenchmarkSet_Union(b *testing.B) {

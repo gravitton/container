@@ -23,8 +23,8 @@ Generic containers for Go
 
 ## Features
 
-- **Arrays** – a table of values per index of a size, stored row by row in one slice.
-- **Sets** – immutable sorted sets of any element with a `Compare` method, with their set operations.
+- **Arrays**: a value per `geom.Point` of a size, in one slice, with sides of any integer type.
+- **Sets**: immutable sorted sets of any `Compare` element, with union, intersection and difference.
 
 The rules behind them are in the [package documentation][link-go-dev-reference].
 
@@ -34,55 +34,115 @@ The rules behind them are in the [package documentation][link-go-dev-reference].
 go get github.com/gravitton/container
 ```
 
+```go
+import "github.com/gravitton/container"
+```
 
 ## Usage
 
 ### Arrays
 
-`Array[T, S]` is a table of values, one for every index of a size in columns and rows. `S` is
-the integer type of its sides and indices, taken from the size it is made with:
+An `Array[T, S]` holds one value for every index of a size in columns and rows. `S` is the
+integer type of its sides and indices, taken from the size it is made with. An array is a handle,
+as a slice is: a copy shares its values, and `Clone` gives storage of its own.
 
 ```go
-heat := container.Arr[float64](geom.Sz(64, 64))        // an Array[float64, int]
+a := container.Arr[int](geom.Sz(4, 3))                  // an Array[int, int], every value zero
 small := container.Arr[uint8](geom.Sz[int16](320, 200)) // an Array[uint8, int16], indexed by geom.Point[int16]
 
-heat.Set(geom.Pt(1, 2), 0.5)
-*heat.Get(geom.Pt(1, 2)) += 0.25
+a.Set(geom.Pt(2, 1), 7)
+*a.Get(geom.Pt(2, 1)) += 1 // a pointer into the array
+a.Contains(geom.Pt(4, 0))  // false, the check before Get and Set, which panic outside
+a.Size()                   // 4x3; also Width, Height and Len
+snapshot := a.Clone()      // storage of its own
+```
 
-for _, value := range heat.All() { // also Keys and Values
-	*value *= 0.9
+### Iteration
+
+The values are stored row by row, and every traversal follows that order: `Keys` walks the
+indices, `Data` is the storage itself.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/container/refs/heads/main/docs/images/array-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/container/refs/heads/main/docs/images/array-light.svg">
+  <img alt="An array of four columns and three rows, each cell labelled with its index and its offset, beside the same twelve values as one slice, row after row" src="https://raw.githubusercontent.com/gravitton/container/refs/heads/main/docs/images/array-light.svg">
+</picture>
+</p>
+
+```go
+for index, value := range a.All() { // also Keys and Values
+	*value += index.X
 }
 
-values := heat.Data() // every value row by row as a slice into the array, the fastest loop
+values := a.Data() // the values row by row as a slice into the array, the fastest loop
 for i := range values {
-	values[i] = min(values[i], 1)
+	values[i] = min(values[i], 9)
 }
 
-data, err := json.Marshal(heat)   // {"w":64,"h":64,"d":[…]}, the values row by row
-err = json.Unmarshal(data, &heat) // and back; an error where the values do not fill the size
+data, err := json.Marshal(a)   // {"w":4,"h":3,"d":[…]}, the values row by row
+err = json.Unmarshal(data, &a) // and back; an error where the values do not fill the size
 ```
 
 ### Sets
 
-`Set[E]` is an immutable set of any element with a `Compare` method, held once each and sorted:
+A `Set[E]` holds any element with a `Compare` method, once each and in that order. It never
+changes: every operation returns a set, so one is safe to copy and share.
 
 ```go
-seen := container.SetOf(points...) // in any order, with repeats; SetFrom takes a slice as its own
-hit := container.SetOf(geom.Pt(2, 0), geom.Pt(3, 0))
+a := container.SetOf(geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(2, 2))
+from := container.SetFrom(points) // the same from a slice it takes as its own, without a copy
 
-seen.Intersection(hit)       // also Union, Difference and SymmetricDifference, at most one allocation
-seen.Intersects(hit)         // whether they share an element, without building it; also Encloses
-seen.Contains(geom.Pt(1, 0)) // a binary search
-seen.Len()                   // also IsEmpty and Equal
+a.Contains(geom.Pt(2, 1)) // true, a binary search
+a.Len()                   // 4; also IsEmpty
+a.First()                 // (1,1), true; also Last
+a.Index(geom.Pt(2, 1))    // 2, true, the index At reads it back from
+```
 
-for p := range seen.All() { // in order; also Backward
+### Set operations
+
+Each operation walks both sets once and allocates its result once, or not at all where it equals
+one of them.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gravitton/container/refs/heads/main/docs/images/operations-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/gravitton/container/refs/heads/main/docs/images/operations-light.svg">
+  <img alt="Two overlapping squares of points, a and b, and the cells of their union, intersection, difference and symmetric difference" src="https://raw.githubusercontent.com/gravitton/container/refs/heads/main/docs/images/operations-light.svg">
+</picture>
+</p>
+
+```go
+b := container.SetOf(geom.Pt(2, 2), geom.Pt(3, 2), geom.Pt(2, 3), geom.Pt(3, 3))
+
+a.Union(b)               // (1,1) (1,2) (2,1) (2,2) (2,3) (3,2) (3,3)
+a.Intersection(b)        // (2,2)
+a.Difference(b)          // (1,1) (1,2) (2,1)
+a.SymmetricDifference(b) // (1,1) (1,2) (2,1) (2,3) (3,2) (3,3)
+
+a.Intersects(b) // true, without building the intersection
+a.Encloses(b)   // false, whether a holds every element of b
+a.Equal(b)      // false
+```
+
+A set is walked and stored in its order:
+
+```go
+for p := range a.All() { // also Backward
 	draw(p)
 }
 
-seen.Elements()    // the elements as a fresh slice; also AppendElements
-json.Marshal(seen) // an array of the elements in order, null for the empty set
+a.Elements()    // a fresh slice; also AppendElements
+json.Marshal(a) // [{"x":1,"y":1},…], null for the empty set
 ```
 
+Full reference: [pkg.go.dev][link-go-dev-reference].
+
+## Not planned, by design
+
+A container knows no layout: an array has no neighbors and a set no shape. Those belong to the
+package that gives the indices a meaning. A new container joins when a second package needs it,
+so there is no map, list, heap or queue until a game asks for one.
 
 ## Credits
 

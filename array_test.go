@@ -113,35 +113,37 @@ func TestArray_Constructor(t *testing.T) {
 }
 
 func ExampleArr() {
-	heat := Arr[float64](geom.Sz(3, 2))
-	heat.Set(geom.Pt(1, 1), 0.5)
-	*heat.Get(geom.Pt(1, 1)) += 0.25
-
-	for _, value := range heat.All() {
-		*value *= 2
-	}
-
-	values := heat.Data()
-	for i := range values {
-		values[i] /= 2
-	}
-
-	data, _ := json.Marshal(heat)
-	var decoded Array[float64, int]
-	err := json.Unmarshal(data, &decoded)
+	a := Arr[int](geom.Sz(4, 3))
 	small := Arr[uint8](geom.Sz[int16](320, 200))
 
-	fmt.Println(heat.Size(), heat.Len(), *heat.Get(geom.Pt(1, 1)))
-	fmt.Println(heat.Data())
+	a.Set(geom.Pt(2, 1), 7)
+	*a.Get(geom.Pt(2, 1)) += 1
+	snapshot := a.Clone()
+
+	for index, value := range a.All() {
+		*value += index.X
+	}
+
+	values := a.Data()
+	for i := range values {
+		values[i] = min(values[i], 9)
+	}
+
+	data, _ := json.Marshal(a)
+	var decoded Array[int, int]
+	err := json.Unmarshal(data, &decoded)
+
+	fmt.Println(a.Contains(geom.Pt(4, 0)), a.Size(), a.Len(), small.Size())
+	fmt.Println(snapshot.Data())
+	fmt.Println(a.Data())
 	fmt.Println(string(data))
-	fmt.Println(decoded.Size(), *decoded.Get(geom.Pt(1, 1)), err)
-	fmt.Println(small.Size(), small.Len())
+	fmt.Println(decoded.Data(), err)
 	// Output:
-	// 3x2 6 0.75
-	// [0 0 0 0 0.75 0]
-	// {"w":3,"h":2,"d":[0,0,0,0,0.75,0]}
-	// 3x2 0.75 <nil>
-	// 320x200 64000
+	// false 4x3 12 320x200
+	// [0 0 0 0 0 0 8 0 0 0 0 0]
+	// [0 1 2 3 0 1 9 3 0 1 2 3]
+	// {"w":4,"h":3,"d":[0,1,2,3,0,1,9,3,0,1,2,3]}
+	// [0 1 2 3 0 1 9 3 0 1 2 3] <nil>
 }
 
 func TestArray_Size(t *testing.T) {
