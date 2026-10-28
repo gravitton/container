@@ -138,12 +138,6 @@ json.Marshal(a) // [{"x":1,"y":1},…], null for the empty set
 
 Full reference: [pkg.go.dev][link-go-dev-reference].
 
-## Not planned, by design
-
-A container knows no layout: an array has no neighbors and a set no shape. Those belong to the
-package that gives the indices a meaning. A new container joins when a second package needs it,
-so there is no map, list, heap or queue until a game asks for one.
-
 ## Credits
 
 - [Tomáš Novotný](https://github.com/tomas-novotny)
