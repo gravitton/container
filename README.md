@@ -15,17 +15,16 @@
 [![Go Version][ico-go-version]][link-go]
 [![Software License][ico-license]][link-licence]
 
-Generic containers for Go
+Generic containers: a 2D array indexed by points and an immutable sorted set
 
 <hr>
 
 </div>
 
-
 ## Features
 
-- **Arrays**: a value per `geom.Point` of a size, in one slice, with sides of any integer type.
-- **Sets**: immutable sorted sets of any `Compare` element, with union, intersection and difference.
+- **Arrays** – a value per `geom.Point` of a size, in one slice, with sides of any integer type.
+- **Sets** – immutable sorted sets of any `Compare` element, with union, intersection and difference.
 
 The rules behind them are in the [package documentation][link-go-dev-reference].
 
@@ -143,7 +142,6 @@ Full reference: [pkg.go.dev][link-go-dev-reference].
 
 - [Tomáš Novotný](https://github.com/tomas-novotny)
 - [All Contributors][link-contributors]
-
 
 ## License
 
