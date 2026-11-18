@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/gravitton/container v1.0.1
-	github.com/gravitton/geometry v1.19.0
+	github.com/gravitton/geometry v1.20.0
 )
 
 replace github.com/gravitton/container => ../../..
