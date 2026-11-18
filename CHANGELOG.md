@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased](https://github.com/gravitton/container/compare/v1.0.1...main)
 
 ## [v1.0.1](https://github.com/gravitton/container/compare/v1.0.0...v1.0.1) (2026-11-06)
+
 ### Changed
 - Require `geometry` v1.18.0
 - CI runs the shared workflow of `gravitton/.github`, adding arm64 and the fused multiply-add check, and can be started by hand
 
 ## [v1.0.0](https://github.com/gravitton/container/commits/v1.0.0) (2026-10-27)
+
 ### Added
 - `Array`, a table of values per index of a size in columns and rows, stored row by row
 - `Set`, an immutable sorted set with its set operations
