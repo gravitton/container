@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased](https://github.com/gravitton/container/compare/v1.0.2...main)
 
+### Added
+- `Deque`, a double-ended queue on a ring that grows by doubling, used through a pointer
+
 ## [v1.0.2](https://github.com/gravitton/container/compare/v1.0.1...v1.0.2) (2026-11-18)
 
 ### Changed

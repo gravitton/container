@@ -1,5 +1,5 @@
-// Package container provides generic containers, each used as a value, that know no layout. It
-// builds on github.com/gravitton/geometry for the points and sizes an array speaks.
+// Package container provides generic containers that know no layout. It builds on
+// github.com/gravitton/geometry for the points and sizes an array speaks.
 //
 // # Types
 //
@@ -8,6 +8,9 @@
 //   - [Set] is an immutable set held in the order of its elements' Compare method, which alone
 //     decides that two elements are the same. [SetOf] copies the elements it is given; [SetFrom]
 //     takes the slice as its own.
+//   - [Deque] is a double-ended queue on a ring that grows by doubling, pushed to and popped from
+//     either end in constant time. Unlike the others it changes in place and is used through a
+//     pointer; go vet reports a copy.
 //
 // # Rules
 //
@@ -22,7 +25,8 @@
 //
 // # Allocations
 //
-// A slice or set result is allocated once, at its final size, and each slice result has an
+// A push to a [Deque] allocates only where its ring is full, a ring of twice the length, and
+// [Deque.Clear] keeps the ring. A slice or set result is allocated once, at its final size, and each slice result has an
 // Append form that allocates nothing once the caller's slice has room. [SetOf] allocates once,
 // for its copy of the elements, and [SetFrom] nothing. A read, a write and a test allocate
 // nothing; [Array.Data] is a read, the array's own storage rather than a result.
@@ -33,6 +37,6 @@
 // error:
 //
 //   - [Arr] for a negative width or height, or a size of more values than an int counts.
-//   - [Array.Get] and [Array.Set] for an index outside the array, and [Set.At] for an index
-//     outside the set.
+//   - [Array.Get] and [Array.Set] for an index outside the array, [Set.At] for an index outside
+//     the set, and [Deque.At] for an index outside the deque.
 package container

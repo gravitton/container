@@ -15,7 +15,7 @@
 [![Go Version][ico-go-version]][link-go]
 [![Software License][ico-license]][link-licence]
 
-Generic containers: a 2D array indexed by points and an immutable sorted set
+Generic containers: a 2D array indexed by points, an immutable sorted set and a double-ended queue
 
 <hr>
 
@@ -25,6 +25,7 @@ Generic containers: a 2D array indexed by points and an immutable sorted set
 
 - **Arrays** – a value per `geom.Point` of a size, in one slice, with sides of any integer type.
 - **Sets** – immutable sorted sets of any `Compare` element, with union, intersection and difference.
+- **Deques** – double-ended queues on a growing ring, pushed and popped at either end in constant time.
 
 The rules behind them are in the [package documentation][link-go-dev-reference].
 
@@ -134,6 +135,30 @@ for p := range a.All() { // also Backward
 
 a.Elements()    // a fresh slice; also AppendElements
 json.Marshal(a) // [{"x":1,"y":1},…], null for the empty set
+```
+
+### Deques
+
+A `Deque[E]` holds elements in order from its front to its back and changes in place, so unlike
+the other containers it is used through a pointer and never copied, which `go vet` reports. Its
+zero value is the empty deque, ready to use.
+
+```go
+var body container.Deque[geom.Point[int]]
+body.PushBack(geom.Pt(2, 1)) // also PushFront
+body.PushBack(geom.Pt(1, 1))
+
+body.PushFront(geom.Pt(3, 1)) // a step: the head in front,
+body.PopBack()                // the tail dropped; (1,1), true, and false once empty; also PopFront
+body.Front()                  // (3,1), true; also Back
+body.At(1)                    // (2,1), counted from the front
+body.Len()                    // 2; also IsEmpty
+
+for i, cell := range body.All() { // from the front to the back
+	draw(i, cell)
+}
+
+body.Clear() // keeps the ring, so the next pushes allocate nothing
 ```
 
 Full reference: [pkg.go.dev][link-go-dev-reference].
