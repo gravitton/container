@@ -128,15 +128,15 @@ func TestDeque_PushFront(t *testing.T) {
 		d := &Deque[int]{}
 		d.PushFront(0)
 
-		assert.Equal(t, testing.AllocsPerRun(1, func() {
+		assert.Allocates(t, func() {
 			d.PushFront(1)
 			d.PopBack()
-		}), 0.0)
-		assert.Equal(t, testing.AllocsPerRun(1, func() {
+		}, 0)
+		assert.AllocatesRuns(t, func() {
 			for range d.Len() + 4 {
 				d.PushFront(1)
 			}
-		}), 1.0)
+		}, 1, 1)
 	})
 	t.Run("with a PopBack moves every element back by one and keeps the length", func(t *testing.T) {
 		for _, test := range testDeques()[1:] {
@@ -200,15 +200,15 @@ func TestDeque_PushBack(t *testing.T) {
 		d := &Deque[int]{}
 		d.PushBack(0)
 
-		assert.Equal(t, testing.AllocsPerRun(1, func() {
+		assert.Allocates(t, func() {
 			d.PushBack(1)
 			d.PopFront()
-		}), 0.0)
-		assert.Equal(t, testing.AllocsPerRun(1, func() {
+		}, 0)
+		assert.AllocatesRuns(t, func() {
 			for range d.Len() + 4 {
 				d.PushBack(1)
 			}
-		}), 1.0)
+		}, 1, 1)
 	})
 }
 
@@ -340,9 +340,9 @@ func TestDeque_PopFront(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		d, _ := testDeque(17)
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkInt, _ = d.PopFront()
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -378,9 +378,9 @@ func TestDeque_PopBack(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		d, _ := testDeque(17)
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkInt, _ = d.PopBack()
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -396,12 +396,12 @@ func TestDeque_Clear(t *testing.T) {
 	t.Run("keeps the ring for the elements pushed next", func(t *testing.T) {
 		d, elements := testDeque(17)
 
-		assert.Equal(t, testing.AllocsPerRun(1, func() {
+		assert.Allocates(t, func() {
 			d.Clear()
 			for _, element := range elements {
 				d.PushBack(element)
 			}
-		}), 0.0)
+		}, 0)
 		assert.Equal(t, dequeElements(d), elements)
 	})
 }
@@ -433,11 +433,11 @@ func TestDeque_All(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		d, _ := testDeque(17)
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			for _, element := range d.All() {
 				sinkInt += element
 			}
-		}), 0.0)
+		}, 0)
 	})
 }
 

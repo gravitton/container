@@ -13,164 +13,6 @@ import (
 	. "github.com/gravitton/container"
 )
 
-// Tile is an element ordered by x and then by y.
-type Tile struct {
-	X int `json:"x"`
-	Y int `json:"y"`
-}
-
-func (t Tile) Compare(other Tile) int {
-	if order := cmp.Compare(t.X, other.X); order != 0 {
-		return order
-	}
-
-	return cmp.Compare(t.Y, other.Y)
-}
-
-func (t Tile) String() string {
-	return fmt.Sprintf("(%d,%d)", t.X, t.Y)
-}
-
-var (
-	testSet      = SetOf(square(Tile{0, 0}, 2)...)
-	testSetOther = SetOf(square(Tile{3, -1}, 2)...)
-	testSetEmpty = Set[Tile]{}
-
-	sinkSet   Set[Tile]
-	sinkTiles []Tile
-)
-
-// square returns the tiles within n columns and rows of the center, ordered by x and then by y.
-func square(center Tile, n int) []Tile {
-	tiles := make([]Tile, 0, (2*n+1)*(2*n+1))
-	for dx := -n; dx <= n; dx++ {
-		for dy := -n; dy <= n; dy++ {
-			tiles = append(tiles, Tile{center.X + dx, center.Y + dy})
-		}
-	}
-
-	return tiles
-}
-
-// referenceSet returns the elements a map-based set keeps of the two sets, sorted.
-func referenceSet(a, b Set[Tile], keep func(inA, inB bool) bool) []Tile {
-	inA, inB := referenceMap(a), referenceMap(b)
-
-	var kept []Tile
-	for element := range inA {
-		if keep(true, inB[element]) {
-			kept = append(kept, element)
-		}
-	}
-	for element := range inB {
-		if !inA[element] && keep(false, true) {
-			kept = append(kept, element)
-		}
-	}
-	slices.SortFunc(kept, Tile.Compare)
-
-	return kept
-}
-
-// referenceMap returns the elements of the set as the keys of a map.
-func referenceMap(s Set[Tile]) map[Tile]bool {
-	elements := map[Tile]bool{}
-	for element := range s.All() {
-		elements[element] = true
-	}
-
-	return elements
-}
-
-// testSets returns the sets the properties of a single set are checked on.
-func testSets() []Set[Tile] {
-	return []Set[Tile]{testSet, testSetOther, testSetEmpty, SetOf(Tile{9, 9}), SetOf(square(Tile{0, 0}, 1)...)}
-}
-
-// testSetPairs returns the pairs of sets every operation is checked on.
-func testSetPairs() [][2]Set[Tile] {
-	return [][2]Set[Tile]{
-		{testSet, testSetOther},
-		{testSetOther, testSet},
-		{testSet, testSet},
-		{testSet, testSetEmpty},
-		{testSetEmpty, testSet},
-		{testSetEmpty, testSetEmpty},
-		{testSet, SetOf(Tile{9, 9})},
-		{SetOf(Tile{9, 9}), testSet},
-		{testSet, SetOf(square(Tile{0, 0}, 1)...)},
-		{SetOf(square(Tile{0, 0}, 1)...), testSet},
-	}
-}
-
-// testSetOperation runs the sections every set operation shares, checking it against the
-// elements a map keeps of the two sets.
-func testSetOperation(t *testing.T, operation func(a, b Set[Tile]) Set[Tile], keep func(inA, inB bool) bool) {
-	t.Run("keeps what a map keeps", func(t *testing.T) {
-		for _, pair := range testSetPairs() {
-			assert.Equal(t, slices.Collect(operation(pair[0], pair[1]).All()), referenceSet(pair[0], pair[1], keep), fmt.Sprint(pair[0].Elements(), " and ", pair[1].Elements(), ": "))
-		}
-	})
-	t.Run("leaves both sets alone", func(t *testing.T) {
-		before, beforeOther := testSet.Elements(), testSetOther.Elements()
-		sinkSet = operation(testSet, testSetOther)
-
-		assert.Equal(t, testSet.Elements(), before)
-		assert.Equal(t, testSetOther.Elements(), beforeOther)
-	})
-	t.Run("allocates once, and nothing where the result is empty or equals a side", func(t *testing.T) {
-		for _, pair := range testSetPairs() {
-			allocs := 1.0
-			if result := operation(pair[0], pair[1]); result.IsEmpty() || result.Equal(pair[0]) || result.Equal(pair[1]) {
-				allocs = 0
-			}
-
-			assert.Equal(t, testing.AllocsPerRun(10, func() {
-				sinkSet = operation(pair[0], pair[1])
-			}), allocs, fmt.Sprint(pair[0].Elements(), " and ", pair[1].Elements(), ": "))
-		}
-	})
-}
-
-// fuzzSetOperation checks a set operation on two sets of fuzzed tiles against the elements a
-// map keeps of them.
-func fuzzSetOperation(f *testing.F, operation func(a, b Set[Tile]) Set[Tile], keep func(inA, inB bool) bool) {
-	f.Add([]byte{1, 2, 3, 4, 5, 6}, []byte{3, 4, 5, 6, 7, 0})
-	f.Add([]byte{}, []byte{0, 0})
-	f.Add([]byte{7, 7, 7, 7}, []byte{})
-
-	f.Fuzz(func(t *testing.T, a, b []byte) {
-		first, second := fuzzSet(a), fuzzSet(b)
-
-		assert.Equal(t, slices.Collect(operation(first, second).All()), referenceSet(first, second, keep), fmt.Sprint(first.Elements(), " and ", second.Elements(), ": "))
-	})
-}
-
-// fuzzSetRelation checks a relation of two sets of fuzzed tiles against a map: it holds where
-// the map finds an element to keep, or where it finds none when found is false.
-func fuzzSetRelation(f *testing.F, relation func(a, b Set[Tile]) bool, keep func(inA, inB bool) bool, found bool) {
-	f.Add([]byte{1, 2, 3, 4, 5, 6}, []byte{3, 4, 5, 6, 7, 0})
-	f.Add([]byte{}, []byte{0, 0})
-	f.Add([]byte{7, 7, 7, 7}, []byte{7, 7})
-
-	f.Fuzz(func(t *testing.T, a, b []byte) {
-		first, second := fuzzSet(a), fuzzSet(b)
-
-		assert.Equal(t, relation(first, second), (len(referenceSet(first, second, keep)) > 0) == found, fmt.Sprint(first.Elements(), " and ", second.Elements(), ": "))
-	})
-}
-
-// fuzzSet returns the set of the tiles the bytes give in pairs, within four of the origin, so
-// two fuzzed sets often share some.
-func fuzzSet(data []byte) Set[Tile] {
-	tiles := make([]Tile, 0, len(data)/2)
-	for i := 0; i+1 < len(data); i += 2 {
-		tiles = append(tiles, Tile{int(data[i]%8) - 4, int(data[i+1]%8) - 4})
-	}
-
-	return SetFrom(tiles)
-}
-
 func TestSetOf(t *testing.T) {
 	t.Run("orders the elements and drops repeats", func(t *testing.T) {
 		assert.Equal(t, SetOf(Tile{1, 0}, Tile{0, 1}, Tile{1, 0}, Tile{0, 0}).Elements(), []Tile{{0, 0}, {0, 1}, {1, 0}})
@@ -190,33 +32,10 @@ func TestSetOf(t *testing.T) {
 	t.Run("allocates once", func(t *testing.T) {
 		tiles := square(Tile{0, 0}, 2)
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkSet = SetOf(tiles...)
-		}), 1.0)
+		}, 1)
 	})
-}
-
-func ExampleSetOf() {
-	a := SetOf(geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(2, 2))
-	points := []geom.Point[int]{geom.Pt(2, 2), geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(1, 1)}
-	from := SetFrom(points)
-
-	first, ok := a.First()
-	index, found := a.Index(geom.Pt(2, 1))
-
-	fmt.Println(from.Equal(a), a.Contains(geom.Pt(2, 1)), a.Len())
-	fmt.Println(first, ok, index, found)
-	fmt.Println(slices.Collect(a.All()), slices.Collect(a.Backward()))
-	fmt.Println(a.Elements())
-
-	data, _ := json.Marshal(a)
-	fmt.Println(string(data))
-	// Output:
-	// true true 4
-	// (1,1) true 2 true
-	// [(1,1) (1,2) (2,1) (2,2)] [(2,2) (2,1) (1,2) (1,1)]
-	// [(1,1) (1,2) (2,1) (2,2)]
-	// [{"x":1,"y":1},{"x":1,"y":2},{"x":2,"y":1},{"x":2,"y":2}]
 }
 
 func TestSetFrom(t *testing.T) {
@@ -245,9 +64,9 @@ func TestSetFrom(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		tiles := square(Tile{0, 0}, 2)
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkSet = SetFrom(tiles)
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -379,9 +198,9 @@ func TestSet_Elements(t *testing.T) {
 		elements := testSet.Elements()
 
 		assert.Equal(t, cap(elements), len(elements))
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkTiles = testSet.Elements()
-		}), 1.0)
+		}, 1)
 	})
 }
 
@@ -395,9 +214,9 @@ func TestSet_AppendElements(t *testing.T) {
 	t.Run("allocates nothing with room", func(t *testing.T) {
 		buffer := make([]Tile, 0, testSet.Len())
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkTiles = testSet.AppendElements(buffer[:0])
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -447,23 +266,6 @@ func TestSet_Union(t *testing.T) {
 	testSetOperation(t, Set[Tile].Union, func(inA, inB bool) bool {
 		return inA || inB
 	})
-}
-
-func ExampleSet_Union() {
-	a := SetOf(geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(2, 2))
-	b := SetOf(geom.Pt(2, 2), geom.Pt(3, 2), geom.Pt(2, 3), geom.Pt(3, 3))
-
-	fmt.Println(a.Union(b).Elements())
-	fmt.Println(a.Intersection(b).Elements())
-	fmt.Println(a.Difference(b).Elements())
-	fmt.Println(a.SymmetricDifference(b).Elements())
-	fmt.Println(a.Intersects(b), a.Encloses(b), a.Equal(b))
-	// Output:
-	// [(1,1) (1,2) (2,1) (2,2) (2,3) (3,2) (3,3)]
-	// [(2,2)]
-	// [(1,1) (1,2) (2,1)]
-	// [(1,1) (1,2) (2,1) (2,3) (3,2) (3,3)]
-	// true false false
 }
 
 func BenchmarkSet_Union(b *testing.B) {
@@ -567,9 +369,9 @@ func TestSet_Encloses(t *testing.T) {
 		}
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkBool = testSet.Encloses(testSetOther)
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -597,9 +399,9 @@ func TestSet_Intersects(t *testing.T) {
 		}
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkBool = testSet.Intersects(testSetOther)
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -711,3 +513,201 @@ func FuzzSet_JSON(f *testing.F) {
 		assert.True(t, again.Equal(decoded))
 	})
 }
+
+func ExampleSetOf() {
+	a := SetOf(geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(2, 2))
+	points := []geom.Point[int]{geom.Pt(2, 2), geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(1, 1)}
+	from := SetFrom(points)
+
+	first, ok := a.First()
+	index, found := a.Index(geom.Pt(2, 1))
+
+	fmt.Println(from.Equal(a), a.Contains(geom.Pt(2, 1)), a.Len())
+	fmt.Println(first, ok, index, found)
+	fmt.Println(slices.Collect(a.All()), slices.Collect(a.Backward()))
+	fmt.Println(a.Elements())
+
+	data, _ := json.Marshal(a)
+	fmt.Println(string(data))
+	// Output:
+	// true true 4
+	// (1,1) true 2 true
+	// [(1,1) (1,2) (2,1) (2,2)] [(2,2) (2,1) (1,2) (1,1)]
+	// [(1,1) (1,2) (2,1) (2,2)]
+	// [{"x":1,"y":1},{"x":1,"y":2},{"x":2,"y":1},{"x":2,"y":2}]
+}
+
+func ExampleSet_Union() {
+	a := SetOf(geom.Pt(1, 1), geom.Pt(2, 1), geom.Pt(1, 2), geom.Pt(2, 2))
+	b := SetOf(geom.Pt(2, 2), geom.Pt(3, 2), geom.Pt(2, 3), geom.Pt(3, 3))
+
+	fmt.Println(a.Union(b).Elements())
+	fmt.Println(a.Intersection(b).Elements())
+	fmt.Println(a.Difference(b).Elements())
+	fmt.Println(a.SymmetricDifference(b).Elements())
+	fmt.Println(a.Intersects(b), a.Encloses(b), a.Equal(b))
+	// Output:
+	// [(1,1) (1,2) (2,1) (2,2) (2,3) (3,2) (3,3)]
+	// [(2,2)]
+	// [(1,1) (1,2) (2,1)]
+	// [(1,1) (1,2) (2,1) (2,3) (3,2) (3,3)]
+	// true false false
+}
+
+// testSetOperation runs the sections every set operation shares, checking it against the
+// elements a map keeps of the two sets.
+func testSetOperation(t *testing.T, operation func(a, b Set[Tile]) Set[Tile], keep func(inA, inB bool) bool) {
+	t.Run("keeps what a map keeps", func(t *testing.T) {
+		for _, pair := range testSetPairs() {
+			assert.Equal(t, slices.Collect(operation(pair[0], pair[1]).All()), referenceSet(pair[0], pair[1], keep), fmt.Sprint(pair[0].Elements(), " and ", pair[1].Elements(), ": "))
+		}
+	})
+	t.Run("leaves both sets alone", func(t *testing.T) {
+		before, beforeOther := testSet.Elements(), testSetOther.Elements()
+		sinkSet = operation(testSet, testSetOther)
+
+		assert.Equal(t, testSet.Elements(), before)
+		assert.Equal(t, testSetOther.Elements(), beforeOther)
+	})
+	t.Run("allocates once, and nothing where the result is empty or equals a side", func(t *testing.T) {
+		for _, pair := range testSetPairs() {
+			allocs := 1.0
+			if result := operation(pair[0], pair[1]); result.IsEmpty() || result.Equal(pair[0]) || result.Equal(pair[1]) {
+				allocs = 0
+			}
+
+			assert.Allocates(t, func() {
+				sinkSet = operation(pair[0], pair[1])
+			}, int(allocs), fmt.Sprint(pair[0].Elements(), " and ", pair[1].Elements(), ": "))
+		}
+	})
+}
+
+// Tile is an element ordered by x and then by y.
+type Tile struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+func (t Tile) Compare(other Tile) int {
+	if order := cmp.Compare(t.X, other.X); order != 0 {
+		return order
+	}
+
+	return cmp.Compare(t.Y, other.Y)
+}
+
+func (t Tile) String() string {
+	return fmt.Sprintf("(%d,%d)", t.X, t.Y)
+}
+
+// testSetPairs returns the pairs of sets every operation is checked on.
+func testSetPairs() [][2]Set[Tile] {
+	return [][2]Set[Tile]{
+		{testSet, testSetOther},
+		{testSetOther, testSet},
+		{testSet, testSet},
+		{testSet, testSetEmpty},
+		{testSetEmpty, testSet},
+		{testSetEmpty, testSetEmpty},
+		{testSet, SetOf(Tile{9, 9})},
+		{SetOf(Tile{9, 9}), testSet},
+		{testSet, SetOf(square(Tile{0, 0}, 1)...)},
+		{SetOf(square(Tile{0, 0}, 1)...), testSet},
+	}
+}
+
+// square returns the tiles within n columns and rows of the center, ordered by x and then by y.
+func square(center Tile, n int) []Tile {
+	tiles := make([]Tile, 0, (2*n+1)*(2*n+1))
+	for dx := -n; dx <= n; dx++ {
+		for dy := -n; dy <= n; dy++ {
+			tiles = append(tiles, Tile{center.X + dx, center.Y + dy})
+		}
+	}
+
+	return tiles
+}
+
+// fuzzSetOperation checks a set operation on two sets of fuzzed tiles against the elements a
+// map keeps of them.
+func fuzzSetOperation(f *testing.F, operation func(a, b Set[Tile]) Set[Tile], keep func(inA, inB bool) bool) {
+	f.Add([]byte{1, 2, 3, 4, 5, 6}, []byte{3, 4, 5, 6, 7, 0})
+	f.Add([]byte{}, []byte{0, 0})
+	f.Add([]byte{7, 7, 7, 7}, []byte{})
+
+	f.Fuzz(func(t *testing.T, a, b []byte) {
+		first, second := fuzzSet(a), fuzzSet(b)
+
+		assert.Equal(t, slices.Collect(operation(first, second).All()), referenceSet(first, second, keep), fmt.Sprint(first.Elements(), " and ", second.Elements(), ": "))
+	})
+}
+
+// referenceSet returns the elements a map-based set keeps of the two sets, sorted.
+func referenceSet(a, b Set[Tile], keep func(inA, inB bool) bool) []Tile {
+	inA, inB := referenceMap(a), referenceMap(b)
+
+	var kept []Tile
+	for element := range inA {
+		if keep(true, inB[element]) {
+			kept = append(kept, element)
+		}
+	}
+	for element := range inB {
+		if !inA[element] && keep(false, true) {
+			kept = append(kept, element)
+		}
+	}
+	slices.SortFunc(kept, Tile.Compare)
+
+	return kept
+}
+
+// referenceMap returns the elements of the set as the keys of a map.
+func referenceMap(s Set[Tile]) map[Tile]bool {
+	elements := map[Tile]bool{}
+	for element := range s.All() {
+		elements[element] = true
+	}
+
+	return elements
+}
+
+// fuzzSet returns the set of the tiles the bytes give in pairs, within four of the origin, so
+// two fuzzed sets often share some.
+func fuzzSet(data []byte) Set[Tile] {
+	tiles := make([]Tile, 0, len(data)/2)
+	for i := 0; i+1 < len(data); i += 2 {
+		tiles = append(tiles, Tile{int(data[i]%8) - 4, int(data[i+1]%8) - 4})
+	}
+
+	return SetFrom(tiles)
+}
+
+// fuzzSetRelation checks a relation of two sets of fuzzed tiles against a map: it holds where
+// the map finds an element to keep, or where it finds none when found is false.
+func fuzzSetRelation(f *testing.F, relation func(a, b Set[Tile]) bool, keep func(inA, inB bool) bool, found bool) {
+	f.Add([]byte{1, 2, 3, 4, 5, 6}, []byte{3, 4, 5, 6, 7, 0})
+	f.Add([]byte{}, []byte{0, 0})
+	f.Add([]byte{7, 7, 7, 7}, []byte{7, 7})
+
+	f.Fuzz(func(t *testing.T, a, b []byte) {
+		first, second := fuzzSet(a), fuzzSet(b)
+
+		assert.Equal(t, relation(first, second), (len(referenceSet(first, second, keep)) > 0) == found, fmt.Sprint(first.Elements(), " and ", second.Elements(), ": "))
+	})
+}
+
+// testSets returns the sets the properties of a single set are checked on.
+func testSets() []Set[Tile] {
+	return []Set[Tile]{testSet, testSetOther, testSetEmpty, SetOf(Tile{9, 9}), SetOf(square(Tile{0, 0}, 1)...)}
+}
+
+var (
+	testSet      = SetOf(square(Tile{0, 0}, 2)...)
+	testSetOther = SetOf(square(Tile{3, -1}, 2)...)
+	testSetEmpty = Set[Tile]{}
+
+	sinkSet   Set[Tile]
+	sinkTiles []Tile
+)

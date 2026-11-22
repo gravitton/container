@@ -12,39 +12,6 @@ import (
 	. "github.com/gravitton/container"
 )
 
-var (
-	sinkArray Array[int, int]
-	sinkPoint geom.Point[int]
-	sinkBool  bool
-	sinkInt   int
-	sinkInts  []int
-)
-
-// testArraySizes returns the sizes the properties of an array are checked on.
-func testArraySizes() []geom.Size[int] {
-	return []geom.Size[int]{geom.Sz(4, 3), geom.Sz(1, 1), geom.Sz(1, 5), geom.Sz(0, 0), geom.Sz(4, 0), geom.Sz(0, 3)}
-}
-
-// testArray returns an array of the given size, every value distinct from the others.
-func testArray(size geom.Size[int]) Array[int, int] {
-	a := Arr[int](size)
-	for index, value := range a.All() {
-		*value = 1 + index.X + 100*index.Y
-	}
-
-	return a
-}
-
-// arrayValues returns the values of the array row by row.
-func arrayValues(a Array[int, int]) []int {
-	values := make([]int, 0, a.Len())
-	for value := range a.Values() {
-		values = append(values, *value)
-	}
-
-	return values
-}
-
 func TestArray_Constructor(t *testing.T) {
 	a := Arr[int](geom.Sz(4, 3))
 
@@ -106,44 +73,10 @@ func TestArray_Constructor(t *testing.T) {
 		}
 	})
 	t.Run("allocates its values once", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkArray = Arr[int](geom.Sz(4, 3))
-		}), 1.0)
+		}, 1)
 	})
-}
-
-func ExampleArr() {
-	a := Arr[int](geom.Sz(4, 3))
-	small := Arr[uint8](geom.Sz[int16](320, 200))
-
-	a.Set(geom.Pt(2, 1), 7)
-	*a.Get(geom.Pt(2, 1)) += 1
-	snapshot := a.Clone()
-
-	for index, value := range a.All() {
-		*value += index.X
-	}
-
-	values := a.Data()
-	for i := range values {
-		values[i] = min(values[i], 9)
-	}
-
-	data, _ := json.Marshal(a)
-	var decoded Array[int, int]
-	err := json.Unmarshal(data, &decoded)
-
-	fmt.Println(a.Contains(geom.Pt(4, 0)), a.Size(), a.Len(), small.Size())
-	fmt.Println(snapshot.Data())
-	fmt.Println(a.Data())
-	fmt.Println(string(data))
-	fmt.Println(decoded.Data(), err)
-	// Output:
-	// false 4x3 12 320x200
-	// [0 0 0 0 0 0 8 0 0 0 0 0]
-	// [0 1 2 3 0 1 9 3 0 1 2 3]
-	// {"w":4,"h":3,"d":[0,1,2,3,0,1,9,3,0,1,2,3]}
-	// [0 1 2 3 0 1 9 3 0 1 2 3] <nil>
 }
 
 func TestArray_Size(t *testing.T) {
@@ -229,17 +162,6 @@ func BenchmarkArray_Get(b *testing.B) {
 	})
 }
 
-// benchmarkArrayGet reads every value of a 64 by 64 array through Get.
-func benchmarkArrayGet[S geom.Integer](b *testing.B, a Array[int, S]) {
-	for b.Loop() {
-		for y := range 64 {
-			for x := range 64 {
-				sinkInt = *a.Get(geom.Pt(S(x), S(y)))
-			}
-		}
-	}
-}
-
 func TestArray_Set(t *testing.T) {
 	a := Arr[int](geom.Sz(4, 3))
 
@@ -265,17 +187,6 @@ func BenchmarkArray_Set(b *testing.B) {
 	b.Run("int32", func(b *testing.B) {
 		benchmarkArraySet(b, Arr[int](geom.Sz[int32](64, 64)))
 	})
-}
-
-// benchmarkArraySet writes every value of a 64 by 64 array through Set.
-func benchmarkArraySet[S geom.Integer](b *testing.B, a Array[int, S]) {
-	for b.Loop() {
-		for y := range 64 {
-			for x := range 64 {
-				a.Set(geom.Pt(S(x), S(y)), x)
-			}
-		}
-	}
 }
 
 func FuzzArray_Set(f *testing.F) {
@@ -356,9 +267,9 @@ func TestArray_Data(t *testing.T) {
 		assert.Equal(t, Array[int, int]{}.Data(), nil)
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkInts = a.Data()
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -444,9 +355,9 @@ func TestArray_Clone(t *testing.T) {
 		assert.Equal(t, clone.Len(), 0)
 	})
 	t.Run("allocates its values once", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkArray = original.Clone()
-		}), 1.0)
+		}, 1)
 	})
 }
 
@@ -473,11 +384,11 @@ func TestArray_Keys(t *testing.T) {
 	t.Run("allocates nothing", func(t *testing.T) {
 		a := Arr[int](geom.Sz(8, 8))
 
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			for index := range a.Keys() {
 				sinkPoint = index
 			}
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -513,11 +424,11 @@ func TestArray_Values(t *testing.T) {
 		assert.Equal(t, count, 1)
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			for value := range a.Values() {
 				sinkBool = *value == 0
 			}
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -553,11 +464,11 @@ func TestArray_All(t *testing.T) {
 		assert.Equal(t, count, 1)
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			for index, value := range a.All() {
 				sinkPoint, sinkBool = index, *value == 0
 			}
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -598,9 +509,9 @@ func TestArray_Contains(t *testing.T) {
 		}
 	})
 	t.Run("allocates nothing", func(t *testing.T) {
-		assert.Equal(t, testing.AllocsPerRun(10, func() {
+		assert.Allocates(t, func() {
 			sinkBool = a.Contains(geom.Pt(1, 1))
-		}), 0.0)
+		}, 0)
 	})
 }
 
@@ -714,3 +625,92 @@ func FuzzArray_JSON(f *testing.F) {
 		assert.Equal(t, string(reencoded), string(encoded))
 	})
 }
+
+func ExampleArr() {
+	a := Arr[int](geom.Sz(4, 3))
+	small := Arr[uint8](geom.Sz[int16](320, 200))
+
+	a.Set(geom.Pt(2, 1), 7)
+	*a.Get(geom.Pt(2, 1)) += 1
+	snapshot := a.Clone()
+
+	for index, value := range a.All() {
+		*value += index.X
+	}
+
+	values := a.Data()
+	for i := range values {
+		values[i] = min(values[i], 9)
+	}
+
+	data, _ := json.Marshal(a)
+	var decoded Array[int, int]
+	err := json.Unmarshal(data, &decoded)
+
+	fmt.Println(a.Contains(geom.Pt(4, 0)), a.Size(), a.Len(), small.Size())
+	fmt.Println(snapshot.Data())
+	fmt.Println(a.Data())
+	fmt.Println(string(data))
+	fmt.Println(decoded.Data(), err)
+	// Output:
+	// false 4x3 12 320x200
+	// [0 0 0 0 0 0 8 0 0 0 0 0]
+	// [0 1 2 3 0 1 9 3 0 1 2 3]
+	// {"w":4,"h":3,"d":[0,1,2,3,0,1,9,3,0,1,2,3]}
+	// [0 1 2 3 0 1 9 3 0 1 2 3] <nil>
+}
+
+// benchmarkArrayGet reads every value of a 64 by 64 array through Get.
+func benchmarkArrayGet[S geom.Integer](b *testing.B, a Array[int, S]) {
+	for b.Loop() {
+		for y := range 64 {
+			for x := range 64 {
+				sinkInt = *a.Get(geom.Pt(S(x), S(y)))
+			}
+		}
+	}
+}
+
+// benchmarkArraySet writes every value of a 64 by 64 array through Set.
+func benchmarkArraySet[S geom.Integer](b *testing.B, a Array[int, S]) {
+	for b.Loop() {
+		for y := range 64 {
+			for x := range 64 {
+				a.Set(geom.Pt(S(x), S(y)), x)
+			}
+		}
+	}
+}
+
+// arrayValues returns the values of the array row by row.
+func arrayValues(a Array[int, int]) []int {
+	values := make([]int, 0, a.Len())
+	for value := range a.Values() {
+		values = append(values, *value)
+	}
+
+	return values
+}
+
+// testArraySizes returns the sizes the properties of an array are checked on.
+func testArraySizes() []geom.Size[int] {
+	return []geom.Size[int]{geom.Sz(4, 3), geom.Sz(1, 1), geom.Sz(1, 5), geom.Sz(0, 0), geom.Sz(4, 0), geom.Sz(0, 3)}
+}
+
+// testArray returns an array of the given size, every value distinct from the others.
+func testArray(size geom.Size[int]) Array[int, int] {
+	a := Arr[int](size)
+	for index, value := range a.All() {
+		*value = 1 + index.X + 100*index.Y
+	}
+
+	return a
+}
+
+var (
+	sinkArray Array[int, int]
+	sinkPoint geom.Point[int]
+	sinkBool  bool
+	sinkInt   int
+	sinkInts  []int
+)
