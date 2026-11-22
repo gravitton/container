@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased](https://github.com/gravitton/container/compare/v1.0.2...main)
+## [Unreleased](https://github.com/gravitton/container/compare/v1.1.0...main)
+
+## [v1.1.0](https://github.com/gravitton/container/compare/v1.0.2...v1.1.0) (2026-11-22)
 
 ### Added
 - `Deque`, a double-ended queue on a ring that grows by doubling, used through a pointer
